@@ -1,6 +1,6 @@
 # chip8.rs
 
-A [CHIP-8] emulator implemented in Rust, based on the documentation the "[References](#references)", primarily Matt
+A [CHIP-8] interpreter implemented in Rust, based on the documentation the "[References](#references)", primarily Matt
 Mikolay's "[CHIP‐8 Technical Reference]".
 
 The Hardware specifications are:
