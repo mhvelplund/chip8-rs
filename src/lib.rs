@@ -245,7 +245,10 @@ fn decode_and_execute(state: &mut State) -> Result<bool, Box<dyn std::error::Err
             // 0xCXNN: Set VX to a random number with a mask of NN
             let x = ((instruction & 0x0F00) >> 8) as usize;
             let nn = (instruction & 0x00FF) as u8;
-            todo!();
+
+            let rand_byte: u8 =
+                ((state.pc + state.i + state.v.iter().sum::<u8>() as usize) & 0xFF) as u8; // FIXME: Placeholder for random byte generation
+            state.v[x] = rand_byte & nn;
         }
         0xD000 => {
             // 0xDXYN: Draw a sprite at position VX, VY with N bytes of sprite data starting at the address stored in I.
