@@ -36,6 +36,34 @@ cargo install cross
 cross build -r --target i686-pc-windows-gnu
 ```
 
+## Coverage
+
+Source:
+[Visualizing Rust Code Coverage in VS Code](https://nattrio.medium.com/visualizing-rust-code-coverage-in-vs-code-781aaf334f11).
+
+```shell
+cargo install cargo-nextest --locked
+cargo +stable install cargo-llvm-cov --locked
+```
+
+Install:
+* [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+* [Coverage Gutters](https://marketplace.visualstudio.com/items?itemName=ryanluker.vscode-coverage-gutters)
+
+Generate coverage:
+
+```shell
+cargo llvm-cov nextest --lcov --output-path ./target/lcov.info
+```
+
+_or_
+
+```shell
+cargo watch -x 'llvm-cov nextest --lcov --output-path ./target/lcov.info' -w src
+```
+
+Display the coverage from Coverage Gutters extension.
+
 ## References
 
 * [CHIP-8]

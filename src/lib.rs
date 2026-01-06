@@ -245,8 +245,7 @@ fn decode_and_execute(state: &mut State) -> Result<bool, Box<dyn std::error::Err
             // 0xCXNN: Set VX to a random number with a mask of NN
             let x = ((instruction & 0x0F00) >> 8) as usize;
             let nn = (instruction & 0x00FF) as u8;
-            let rand_byte: u8 = rand::random();
-            state.v[x] = rand_byte & nn;
+            todo!();
         }
         0xD000 => {
             // 0xDXYN: Draw a sprite at position VX, VY with N bytes of sprite data starting at the address stored in I.
@@ -332,4 +331,99 @@ fn draw_sprite(state: &mut State, x: usize, y: usize, n: usize) {
 
 fn unknown_op(instruction: u16) {
     warn!("Ignored instruction: {instruction:04X}");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn instruction_clear_screen() {
+        let mut state = State::new();
+
+        state.screen[0] = true; // Set a pixel
+        state.screen[WIDTH * HEIGHT - 1] = true; // Set another pixel
+
+        // 0x00E0: Clear the display
+        state.memory[0x200] = 0x00;
+        state.memory[0x201] = 0xE0;
+
+        decode_and_execute(&mut state).expect("Failed to execute instruction");
+
+        assert_eq!(state.screen, [false; WIDTH * HEIGHT]);
+        assert_eq!(state.pc, 0x202);
+    }
+
+    #[test]
+    fn instruction_jump() {
+        let mut state = State::new();
+        // 0x1NNN: Jump to address NNN
+        state.memory[0x200] = 0x12;
+        state.memory[0x201] = 0x34;
+
+        decode_and_execute(&mut state).expect("Failed to execute instruction");
+
+        assert_eq!(state.pc, 0x234);
+    }
+
+    #[test]
+    fn instruction_call_and_return() {
+        let mut state = State::new();
+
+        // 0x2NNN: Execute subroutine starting at address NNN
+        state.memory[0x200] = 0x23; // CALL 0x345
+        state.memory[0x201] = 0x45; // CALL 0x345
+
+        // 0x00EE: Return from subroutine
+        state.memory[0x345] = 0x00; // RET instruction high byte
+        state.memory[0x346] = 0xEE; // RET instruction low byte
+
+        decode_and_execute(&mut state).expect("Failed to execute instruction");
+
+        assert_eq!(state.pc, 0x345);
+        assert_eq!(state.stack.len(), 1);
+        assert_eq!(state.stack[0], 0x202);
+
+        decode_and_execute(&mut state).expect("Failed to execute instruction");
+
+        assert_eq!(state.pc, 0x202);
+        assert_eq!(state.stack.len(), 0);
+    }
+
+    #[test]
+    fn instruction_call_stack_underflow() {
+        let mut state = State::new();
+
+        // 0x00EE: Return from subroutine before any CALL to cause stack underflow
+        state.memory[0x200] = 0x00; // RET instruction high byte
+        state.memory[0x201] = 0xEE; // RET instruction low byte
+
+        decode_and_execute(&mut state).expect_err("Should have caused a stack underflow");
+    }
+
+    #[test]
+    fn instruction_skip_if_equal() {
+        let mut state = State::new();
+        // 0x3XNN: Skip the following instruction if the value of register VX equals NN
+        state.v[0] = 0x42;
+        state.memory[0x200] = 0x30; // SE V0, 0x42
+        state.memory[0x201] = 0x42; // SE V0, 0x42
+
+        decode_and_execute(&mut state).expect("Failed to execute instruction");
+
+        assert_eq!(state.pc, 0x204); // Should have skipped the next instruction
+    }
+
+    #[test]
+    fn instruction_no_skip_if_not_equal() {
+        let mut state = State::new();
+        // 0x3XNN: Skip the following instruction if the value of register VX equals NN
+        state.v[0] = 0x41;
+        state.memory[0x200] = 0x30; // SE V0, 0x42
+        state.memory[0x201] = 0x42; // SE V0, 0x42
+
+        decode_and_execute(&mut state).expect("Failed to execute instruction");
+
+        assert_eq!(state.pc, 0x202); // Should not have skipped the next instruction
+    }
 }
