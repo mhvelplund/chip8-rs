@@ -21,5 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .canonicalize()
         .map_err(|e| format!("ROM not found '{}': {}", args.rom_path.display(), e))?;
 
-    run_rom(rom_path)
+    let exit_code = run_rom(rom_path)?;
+    info!("Program exited with code {}", exit_code);
+    Ok(())
 }
