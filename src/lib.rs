@@ -1,17 +1,32 @@
 #![allow(unused)]
 
+use crate::term::{cleanup_terminal, set_styles, setup_terminal, should_exit};
+use crossterm::ExecutableCommand;
+use crossterm::cursor::MoveTo;
+use crossterm::event::{self, poll};
+use crossterm::terminal::{Clear, ClearType, size};
 use log::*;
+use std::io::Write;
+use std::io::stdout;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
 mod constants;
 mod decoder;
 mod state;
+mod term;
 
 pub fn run_rom(rom_path: PathBuf) -> Result<usize, Box<dyn std::error::Error>> {
     let mut state = state::State::try_from(&rom_path)?;
 
     let tick_length = Duration::from_secs(1) / constants::CLOCK_FREQ;
+
+    let original_size = size()?;
+
+    let mut stdout = stdout();
+
+    setup_terminal(&stdout)?;
+    set_styles(&stdout)?;
 
     let exit_code = loop {
         let tick_start = SystemTime::now();
@@ -23,9 +38,29 @@ pub fn run_rom(rom_path: PathBuf) -> Result<usize, Box<dyn std::error::Error>> {
 
         // TODO: Update timers at 60Hz
 
-        // TODO: Handle input
+        if poll(Duration::from_millis(500))? {
+            let event = event::read()?;
 
-        // TODO: Render display
+            // TODO: update keys down in state
+
+            if should_exit(&event)? {
+                break 0;
+            }
+        }
+
+        for y in 0..constants::HEIGHT {
+            stdout.execute(MoveTo(0, y as u16))?;
+            stdout.execute(Clear(ClearType::CurrentLine))?;
+
+            for x in 0..constants::WIDTH {
+                let pixel_on = state.screen[y * constants::WIDTH + x];
+                let symbol = if pixel_on { '█' } else { ' ' };
+                write!(stdout, "{}", symbol)?;
+            }
+        }
+
+        stdout.execute(MoveTo(0, (constants::HEIGHT + 1) as u16))?;
+        writeln!(stdout, "PC: {:03X}", state.pc)?;
 
         // Wait for tick
         let elapsed = tick_start.elapsed().unwrap_or(Duration::from_secs(0));
@@ -33,6 +68,8 @@ pub fn run_rom(rom_path: PathBuf) -> Result<usize, Box<dyn std::error::Error>> {
             std::thread::sleep(tick_length - elapsed);
         }
     };
+
+    cleanup_terminal(&stdout, original_size)?;
 
     debug!("Program halted with exit code {}", exit_code);
 

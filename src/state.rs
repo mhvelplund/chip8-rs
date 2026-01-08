@@ -65,6 +65,7 @@ impl State {
             state.memory[i] = 0xFF;
             state.memory[i + 1] = 0xFF;
         }
+
         state
     }
 

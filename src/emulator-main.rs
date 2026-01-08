@@ -1,7 +1,6 @@
-use std::path::PathBuf;
-
 use chip8_rs::run_rom;
 use clap::Parser;
+use std::path::PathBuf;
 
 #[allow(unused_imports)]
 use log::*;
@@ -14,6 +13,7 @@ struct Args {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
+
     let args = Args::parse();
 
     let rom_path = args
@@ -23,5 +23,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let exit_code = run_rom(rom_path)?;
     info!("Program exited with code {}", exit_code);
+
     Ok(())
 }
