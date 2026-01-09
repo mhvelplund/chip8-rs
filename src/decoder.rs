@@ -217,11 +217,17 @@ pub fn decode_and_execute(
             match instruction & 0x00FF {
                 0x9E => {
                     // 0xEX9E: Skip the following instruction if the key stored in VX is pressed
-                    todo!("Keyboard input is not yet supported")
+                    if state.key_pressed == Some(state.v[x]) {
+                        state.pc += 2;
+                    }
+                    state.key_pressed = None;
                 }
                 0xA1 => {
                     // 0xEXA1: Skip the following instruction if the key stored in VX is not pressed
-                    todo!("Keyboard input is not yet supported")
+                    if state.key_pressed != Some(state.v[x]) {
+                        state.pc += 2;
+                    }
+                    state.key_pressed = None;
                 }
                 _ => {
                     unknown_op(instruction);
@@ -237,7 +243,7 @@ pub fn decode_and_execute(
                 }
                 0x0A => {
                     // 0xFX0A: Wait for a key press and store the value of the key in register VX
-                    todo!("Keyboard input is not yet supported")
+                    state.waiting_for_keypress = Some(x);
                 }
                 0x15 => {
                     // 0xFX15: Set the delay timer to the value of register VX
@@ -260,7 +266,10 @@ pub fn decode_and_execute(
                 0x33 => {
                     // 0xFX33: Store the binary-coded decimal representation of VX,
                     // with the hundreds digit at the address in I, the tens digit at I+1, and the ones digit at I+2
-                    todo!()
+                    let (hundreds, tens, ones) = bcd(state.v[x]);
+                    state.memory[state.i] = hundreds;
+                    state.memory[state.i + 1] = tens;
+                    state.memory[state.i + 2] = ones;
                 }
                 0x55 => {
                     // 0xFX55: Store registers V0 through VX in memory starting at location I
@@ -291,6 +300,20 @@ pub fn decode_and_execute(
     }
 
     Ok(None)
+}
+
+/// Convert a value to its binary-coded decimal (BCD) representation.
+///
+/// # Arguments
+/// * `value` - The value to convert to BCD.
+///
+/// # Returns
+/// A tuple containing the hundreds, tens, and ones digits of the BCD representation.
+fn bcd(value: u8) -> (u8, u8, u8) {
+    let hundreds = value / 100;
+    let tens = (value % 100) / 10;
+    let ones = value % 10;
+    (hundreds, tens, ones)
 }
 
 pub fn unknown_op(instruction: u16) {

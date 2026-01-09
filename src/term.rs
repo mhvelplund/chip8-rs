@@ -1,50 +1,69 @@
-use std::{
-    io::{Stdout, stdout},
-    path::PathBuf,
-    time::Duration,
-};
-
 use crate::constants::{HEIGHT, WIDTH};
 use clap::Parser;
-
+use crossterm::event::{
+    KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+};
 use crossterm::{
     ExecutableCommand,
     cursor::{Hide, Show},
     event::{self, Event, KeyCode, KeyModifiers, poll},
+    execute,
     style::{Color, SetBackgroundColor, SetForegroundColor},
     terminal::{self, Clear, EnterAlternateScreen, LeaveAlternateScreen, SetSize, size},
 };
-#[allow(unused_imports)]
-use log::*;
+use std::io::{Write, stdout};
+use std::{path::PathBuf, time::Duration};
 
-pub fn setup_terminal(mut stdout: &Stdout) -> Result<(), Box<dyn std::error::Error>> {
+/// Set up the terminal for the application.
+///
+/// # Return
+/// * `Ok(())` if the terminal was successfully set up.
+/// * `Err` if there was an error during the setup process.
+pub fn setup_terminal() -> Result<(), Box<dyn std::error::Error>> {
     terminal::enable_raw_mode()?;
-    stdout.execute(EnterAlternateScreen)?;
-    stdout.execute(Hide)?;
-    stdout.execute(SetSize(WIDTH as u16, HEIGHT as u16))?;
+    let mut stdout = stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+    execute!(stdout, Hide)?;
+    execute!(stdout, SetSize(WIDTH as u16, (HEIGHT + 2) as u16))?;
 
     Ok(())
 }
 
-pub fn set_styles(mut stdout: &Stdout) -> Result<(), Box<dyn std::error::Error>> {
-    // stdout.execute(SetBackgroundColor(Color::Yellow))?;
-    // stdout.execute(SetForegroundColor(Color::Red))?;
-    // stdout.execute(Clear(terminal::ClearType::All))?;
+pub fn set_styles() -> Result<(), Box<dyn std::error::Error>> {
+    // execute!(stdout(),SetBackgroundColor(Color::Yellow))?;
+    // execute!(stdout(),SetForegroundColor(Color::Red))?;
+    // execute!(stdout(),Clear(terminal::ClearType::All))?;
     Ok(())
 }
 
-pub fn cleanup_terminal(
-    mut stdout: &Stdout,
-    original_size: (u16, u16),
-) -> Result<(), Box<dyn std::error::Error>> {
-    stdout.execute(Show)?;
-    stdout.execute(LeaveAlternateScreen)?;
-    stdout.execute(SetSize(original_size.0, original_size.1))?;
+/// Restore the terminal to its original state.
+///
+/// # Arguments
+/// * `original_size` - A tuple containing the original width and height of the terminal.
+///
+/// # Return
+/// * `Ok(())` if the terminal was successfully restored.
+/// * `Err` if there was an error during the restoration process.
+pub fn cleanup_terminal(original_size: (u16, u16)) -> Result<(), Box<dyn std::error::Error>> {
+    let mut stdout = stdout();
+    execute!(stdout, Show)?;
+    execute!(stdout, LeaveAlternateScreen)?;
+    execute!(stdout, SetSize(original_size.0, original_size.1))?;
+    execute!(stdout, PopKeyboardEnhancementFlags)?;
     terminal::disable_raw_mode()?;
 
     Ok(())
 }
 
+/// Check if the event is an exit command (Esc key or Ctrl+C).
+///
+/// # Arguments
+/// * `event` - A reference to the event to check.
+///
+/// # Return
+/// * `Ok(true)` if the event is an exit command.
+/// * `Ok(false)` otherwise.
+/// * `Err` if there was an error during the check.
 pub fn should_exit(event: &Event) -> Result<bool, Box<dyn std::error::Error>> {
     if let Event::Key(key_event) = event.to_owned()
         && (key_event.code == KeyCode::Esc

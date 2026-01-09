@@ -1,10 +1,10 @@
 #![allow(unused)]
 
 use crate::term::{cleanup_terminal, set_styles, setup_terminal, should_exit};
-use crossterm::ExecutableCommand;
 use crossterm::cursor::MoveTo;
-use crossterm::event::{self, poll};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, poll};
 use crossterm::terminal::{Clear, ClearType, size};
+use crossterm::{ExecutableCommand, execute};
 use log::*;
 use std::io::Write;
 use std::io::stdout;
@@ -22,23 +22,24 @@ pub fn run_rom(rom_path: PathBuf) -> Result<usize, Box<dyn std::error::Error>> {
     let tick_length = Duration::from_secs(1) / constants::CLOCK_FREQ;
 
     let original_size = size()?;
-
     let mut stdout = stdout();
 
-    setup_terminal(&stdout)?;
-    set_styles(&stdout)?;
+    setup_terminal()?;
+    set_styles()?;
 
     let exit_code = loop {
-        let tick_start = SystemTime::now();
+        let tick_start: SystemTime = SystemTime::now();
 
-        if let Some(exit_code) = decoder::decode_and_execute(&mut state)? {
+        if state.waiting_for_keypress.is_none()
+            && let Some(exit_code) = decoder::decode_and_execute(&mut state)?
+        {
             // Halt execution
             break exit_code;
         }
 
         // TODO: Update timers at 60Hz
 
-        if poll(Duration::from_millis(500))? {
+        if poll(Duration::from_millis(0))? {
             let event = event::read()?;
 
             // TODO: update keys down in state
@@ -46,34 +47,94 @@ pub fn run_rom(rom_path: PathBuf) -> Result<usize, Box<dyn std::error::Error>> {
             if should_exit(&event)? {
                 break 0;
             }
+
+            if let Event::Key(KeyEvent {
+                code: KeyCode::Char(c),
+                ..
+            }) = event
+            {
+                state.key_pressed_at = SystemTime::now();
+
+                let key = match c {
+                    '1' => Some(0x0),
+                    '2' => Some(0x1),
+                    '3' => Some(0x2),
+                    '4' => Some(0x3),
+                    'q' => Some(0x4),
+                    'w' => Some(0x5),
+                    'e' => Some(0x6),
+                    'r' => Some(0x7),
+                    'a' => Some(0x8),
+                    's' => Some(0x9),
+                    'd' => Some(0xA),
+                    'f' => Some(0xB),
+                    'z' => Some(0xC),
+                    'x' => Some(0xD),
+                    'c' => Some(0xE),
+                    'v' => Some(0xF),
+                    _ => None,
+                };
+                state.key_pressed = key;
+
+                if let Some(reg) = state.waiting_for_keypress
+                    && let Some(key) = key
+                {
+                    state.v[reg] = key;
+                    state.waiting_for_keypress = None;
+                }
+            }
+
+            execute!(stdout, MoveTo(0, (constants::HEIGHT + 1) as u16));
+            execute!(stdout, Clear(ClearType::CurrentLine));
+            // write!(stdout, "{event:?}");
+            write!(stdout, "{:?}", state.key_pressed);
         }
 
-        for y in 0..constants::HEIGHT {
-            stdout.execute(MoveTo(0, y as u16))?;
-            stdout.execute(Clear(ClearType::CurrentLine))?;
+        for row in 0..constants::HEIGHT {
+            execute!(stdout, MoveTo(0, row as u16));
 
-            for x in 0..constants::WIDTH {
-                let pixel_on = state.screen[y * constants::WIDTH + x];
+            for column in 0..constants::WIDTH {
+                let pixel_on = state.screen[row * constants::WIDTH + column];
                 let symbol = if pixel_on { '█' } else { ' ' };
                 write!(stdout, "{}", symbol)?;
             }
         }
 
-        stdout.execute(MoveTo(0, (constants::HEIGHT + 1) as u16))?;
-        writeln!(stdout, "PC: {:03X}", state.pc)?;
+        execute!(stdout, MoveTo(0, constants::HEIGHT as u16));
+        write!(stdout, "PC: {:03X}", state.pc);
+
+        // Check for keypress timeout
+        let elapsed = elapsed_time(&state.key_pressed_at);
+        if elapsed > constants::KEY_PRESS_TIMEOUT_MS {
+            state.key_pressed = None;
+            execute!(stdout, MoveTo(0, (constants::HEIGHT + 1) as u16));
+            execute!(stdout, Clear(ClearType::CurrentLine));
+        }
 
         // Wait for tick
-        let elapsed = tick_start.elapsed().unwrap_or(Duration::from_secs(0));
+        let elapsed = elapsed_time(&tick_start);
         if elapsed < tick_length {
             std::thread::sleep(tick_length - elapsed);
         }
     };
 
-    cleanup_terminal(&stdout, original_size)?;
+    cleanup_terminal(original_size)?;
 
     debug!("Program halted with exit code {}", exit_code);
 
     Ok(exit_code)
+}
+
+/// Returns the elapsed time since the given SystemTime.
+/// If the SystemTime is in the future, returns a Duration of zero.
+///
+/// # Arguments
+/// * `t` - A reference to a SystemTime instance.
+///
+/// # Returns
+/// A Duration representing the elapsed time since `t`.
+fn elapsed_time(t: &SystemTime) -> Duration {
+    t.elapsed().unwrap_or(Duration::from_secs(0))
 }
 
 #[cfg(test)]

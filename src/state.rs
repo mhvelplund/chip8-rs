@@ -39,6 +39,15 @@ pub struct State {
 
     /// Registers V0 to VF. VF is the carry flag, while in subtraction, it is the "no borrow" flag. In the draw instruction VF is set upon pixel collision.
     pub v: [u8; 16],
+
+    /// Currently pressed key, if any.
+    pub key_pressed: Option<u8>,
+
+    /// Time when the key was pressed.
+    pub key_pressed_at: std::time::SystemTime,
+
+    /// If the interpreter is waiting for a key press this will be some, and the value is the register index to store the key in.
+    pub waiting_for_keypress: Option<usize>,
 }
 
 impl State {
@@ -52,6 +61,9 @@ impl State {
             screen: [false; constants::WIDTH * constants::HEIGHT],
             stack: VecDeque::new(),
             v: [0; 16],
+            key_pressed: None,
+            key_pressed_at: std::time::SystemTime::now(),
+            waiting_for_keypress: None,
         };
         state.bootstrap_character_rom();
         for i in (0x040..0x200).step_by(2) {
@@ -65,7 +77,6 @@ impl State {
             state.memory[i] = 0xFF;
             state.memory[i + 1] = 0xFF;
         }
-
         state
     }
 
